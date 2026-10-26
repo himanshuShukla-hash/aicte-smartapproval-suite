@@ -1,0 +1,26 @@
+rules_version = '2';
+
+service firebase.storage {
+  match /b/{bucket}/o {
+    
+    // Helper to check authentication
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    // Only allow pdf, jpg, png up to 10MB
+    function isValidDoc() {
+      return request.resource.size < 10 * 1024 * 1024 &&
+        (request.resource.contentType == 'application/pdf' ||
+         request.resource.contentType == 'image/jpeg' ||
+         request.resource.contentType == 'image/png');
+    }
+
+    // Isolated institutional path pattern:
+    // institutions/{institutionId}/applications/{applicationId}/{fileName}
+    match /institutions/{institutionId}/applications/{applicationId}/{fileName} {
+      allow read: if isSignedIn();
+      allow write: if isSignedIn() && isValidDoc();
+    }
+  }
+}

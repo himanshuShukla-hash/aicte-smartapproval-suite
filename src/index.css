@@ -1,0 +1,138 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --primary-navy: #002147;
+  --secondary-blue: #0B3C5D;
+  --accent-saffron: #FF9933;
+  --accent-green: #138808;
+}
+
+body {
+  margin: 0;
+  font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+  background-color: #F4F6F9;
+  color: #1a202c;
+}
+
+/* Passport Seva Government Table Styling */
+.govt-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.875rem;
+  background-color: #ffffff;
+}
+
+.govt-table th {
+  background-color: #002147;
+  color: #ffffff;
+  font-weight: 600;
+  text-align: left;
+  padding: 8px 12px;
+  border: 1px solid #cbd5e1;
+  font-size: 0.825rem;
+  text-transform: uppercase;
+  letter-spacing: 0.025em;
+}
+
+.govt-table td {
+  padding: 8px 12px;
+  border: 1px solid #cbd5e1;
+  color: #334155;
+}
+
+.govt-table tr:nth-child(even) {
+  background-color: #f8fafc;
+}
+
+.govt-table tr:hover {
+  background-color: #f1f5f9;
+}
+
+/* Official Action Buttons */
+.btn-govt-primary {
+  background-color: #002147;
+  color: #ffffff;
+  border: 1px solid #001733;
+  padding: 6px 14px;
+  font-weight: 600;
+  font-size: 0.85rem;
+  border-radius: 3px;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  transition: all 0.15s ease-in-out;
+}
+
+.btn-govt-primary:hover {
+  background-color: #0a366b;
+}
+
+.btn-govt-secondary {
+  background-color: #f8fafc;
+  color: #002147;
+  border: 1px solid #002147;
+  padding: 6px 14px;
+  font-weight: 600;
+  font-size: 0.85rem;
+  border-radius: 3px;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  transition: all 0.15s ease-in-out;
+}
+
+.btn-govt-secondary:hover {
+  background-color: #e2e8f0;
+}
+
+.btn-govt-saffron {
+  background-color: #E65100;
+  color: #ffffff;
+  border: 1px solid #BF360C;
+  padding: 6px 14px;
+  font-weight: 600;
+  font-size: 0.85rem;
+  border-radius: 3px;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  transition: all 0.15s ease-in-out;
+}
+
+.btn-govt-saffron:hover {
+  background-color: #D84315;
+}
+
+/* Form controls */
+.govt-input {
+  border: 1px solid #94a3b8;
+  padding: 6px 10px;
+  border-radius: 2px;
+  font-size: 0.875rem;
+  background-color: #ffffff;
+  outline: none;
+  transition: border-color 0.15s;
+}
+
+.govt-input:focus {
+  border-color: #002147;
+  box-shadow: 0 0 0 1px #002147;
+}
+
+/* Printable Certificate */
+@media print {
+  body * {
+    visibility: hidden;
+  }
+  .printable-area, .printable-area * {
+    visibility: visible;
+  }
+  .printable-area {
+    position: absolute;
+    left: 0;
+    top: 0;
+    width: 100%;
+  }
+}
