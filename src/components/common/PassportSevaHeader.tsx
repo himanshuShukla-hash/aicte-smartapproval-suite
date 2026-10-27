@@ -13,7 +13,8 @@ import {
   HelpCircle,
   PhoneCall,
   Search,
-  BookOpen
+  BookOpen,
+  Video
 } from 'lucide-react';
 
 interface PassportSevaHeaderProps {
@@ -184,7 +185,7 @@ export const PassportSevaHeader: React.FC<PassportSevaHeaderProps> = ({
               </>
             )}
 
-            {currentUser && (currentUser.role === 'reviewer' || currentUser.role === 'committee') && (
+            {currentUser && (currentUser.role === 'reviewer' || currentUser.role === 'admin') && (
               <button
                 onClick={() => onTabChange('reviewer_queue')}
                 className={`px-3 py-2 text-xs font-semibold rounded flex items-center gap-1.5 transition-colors whitespace-nowrap ${
@@ -195,6 +196,36 @@ export const PassportSevaHeader: React.FC<PassportSevaHeaderProps> = ({
               >
                 <CheckSquare className="w-3.5 h-3.5" />
                 Scrutiny Workstation
+              </button>
+            )}
+
+            {/* Separate Standing Hearing Committee (SHC) Tab */}
+            {currentUser && (currentUser.role === 'committee' || currentUser.role === 'admin') && (
+              <button
+                onClick={() => onTabChange('shc_committee')}
+                className={`px-3 py-2 text-xs font-semibold rounded flex items-center gap-1.5 transition-colors whitespace-nowrap ${
+                  activeTab === 'shc_committee'
+                    ? 'bg-orange-600 text-white shadow-xs'
+                    : 'text-slate-200 hover:bg-[#0a366b] hover:text-white'
+                }`}
+              >
+                <Video className="w-3.5 h-3.5 text-amber-300" />
+                SHC Committee
+              </button>
+            )}
+
+            {/* Separate Standing Appellate Committee (SAC) Tab */}
+            {currentUser && (currentUser.role === 'committee' || currentUser.role === 'admin') && (
+              <button
+                onClick={() => onTabChange('sac_committee')}
+                className={`px-3 py-2 text-xs font-semibold rounded flex items-center gap-1.5 transition-colors whitespace-nowrap ${
+                  activeTab === 'sac_committee'
+                    ? 'bg-orange-600 text-white shadow-xs'
+                    : 'text-slate-200 hover:bg-[#0a366b] hover:text-white'
+                }`}
+              >
+                <Video className="w-3.5 h-3.5 text-amber-300" />
+                SAC Committee
               </button>
             )}
 

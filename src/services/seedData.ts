@@ -57,6 +57,24 @@ export const SEED_USERS: UserProfile[] = [
     active: true,
     createdAt: '2026-06-01T08:00:00Z',
     updatedAt: '2026-06-01T08:00:00Z'
+  },
+  {
+    uid: 'usr_committee_shc',
+    displayName: 'Prof. Anand Vardhan (SHC Chairman)',
+    email: 'shc.chair@aicte-india.org',
+    role: 'committee',
+    active: true,
+    createdAt: '2026-07-10T10:00:00Z',
+    updatedAt: '2026-07-10T10:00:00Z'
+  },
+  {
+    uid: 'usr_committee_sac',
+    displayName: 'Justice (Retd.) K. G. Balakrishnan (SAC Head)',
+    email: 'sac.appellate@aicte-india.org',
+    role: 'committee',
+    active: true,
+    createdAt: '2026-07-12T10:00:00Z',
+    updatedAt: '2026-07-12T10:00:00Z'
   }
 ];
 

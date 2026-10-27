@@ -20,7 +20,9 @@ import {
   Building,
   Upload,
   History,
-  Award
+  Award,
+  Video,
+  ShieldAlert
 } from 'lucide-react';
 import { StatusBadge } from '../common/StatusBadge';
 import { StageStepper } from '../common/StageStepper';
@@ -36,6 +38,7 @@ interface InstitutionPortalProps {
   onRespondDeficiency: (deficiencyId: string, responseText: string, docIds: string[]) => Promise<void>;
   onUploadDocument: (appId: string, file: File, docType: ApplicationDocument['documentType']) => Promise<void>;
   onOpenLoa: (app: Application) => void;
+  onAppealToCommittee?: (appId: string, committee: 'shc' | 'sac', statement: string) => Promise<void>;
 }
 
 export const InstitutionPortal: React.FC<InstitutionPortalProps> = ({
@@ -48,7 +51,8 @@ export const InstitutionPortal: React.FC<InstitutionPortalProps> = ({
   onSelectApplication,
   onRespondDeficiency,
   onUploadDocument,
-  onOpenLoa
+  onOpenLoa,
+  onAppealToCommittee
 }) => {
   const [isNewModalOpen, setIsNewModalOpen] = useState(false);
   const [newType, setNewType] = useState<ApplicationType>('extension_of_approval');
@@ -59,6 +63,12 @@ export const InstitutionPortal: React.FC<InstitutionPortalProps> = ({
   const [selectedDeficiency, setSelectedDeficiency] = useState<Deficiency | null>(null);
   const [responseText, setResponseText] = useState('');
   const [isSubmittingResponse, setIsSubmittingResponse] = useState(false);
+
+  // Appeal Modal State
+  const [appealModalApp, setAppealModalApp] = useState<Application | null>(null);
+  const [targetCommittee, setTargetCommittee] = useState<'shc' | 'sac'>('shc');
+  const [appealStatement, setAppealStatement] = useState('');
+  const [isSubmittingAppeal, setIsSubmittingAppeal] = useState(false);
 
   // Workflow tracking modal
   const [trackingApp, setTrackingApp] = useState<Application | null>(null);
@@ -135,6 +145,97 @@ export const InstitutionPortal: React.FC<InstitutionPortalProps> = ({
           Create New Approval Application
         </button>
       </div>
+
+      {/* Rejected / Appeal Alert Notice if any app is rejected or facing adverse order */}
+      {myApps.some(a => a.status === 'rejected' || a.rejectionStage || a.shcHearingSchedule || a.sacHearingSchedule) && (
+        <div className="space-y-3">
+          {myApps.filter(a => a.status === 'rejected').map(app => (
+            <div key={app.applicationId} className="p-4 bg-red-50 border-2 border-red-500 rounded text-xs text-red-950 flex items-start gap-3 shadow-xs">
+              <ShieldAlert className="w-5 h-5 text-red-600 shrink-0 mt-0.5" />
+              <div className="flex-1">
+                <div className="flex items-center justify-between">
+                  <h4 className="font-bold text-sm text-red-900 uppercase">
+                    [OFFICIAL AICTE NOTICE] Application Cancelled by Executive Committee
+                  </h4>
+                  <span className="font-mono text-xs font-bold text-red-800">{app.applicationId}</span>
+                </div>
+                <p className="mt-1 text-slate-800 font-medium leading-relaxed">
+                  {app.finalDecisionRemarks || app.rejectionReason || 'Application stands formally cancelled and rejected by the AICTE Executive Committee after exhaustion of all statutory committee review processes.'}
+                </p>
+                <div className="mt-2 text-[11px] text-red-700">
+                  Official Communication Reference: EC-ORDER-{app.applicationId} | Dated: {app.finalDecisionDate ? new Date(app.finalDecisionDate).toLocaleDateString('en-IN') : 'Official Circular'}
+                </div>
+              </div>
+            </div>
+          ))}
+
+          {myApps.filter(a => a.rejectionStage && a.status !== 'rejected' && a.status !== 'approved').map(app => (
+            <div key={app.applicationId} className="p-4 bg-amber-50 border-2 border-amber-500 rounded text-xs text-amber-950 flex items-start justify-between gap-4 shadow-xs">
+              <div className="space-y-1">
+                <div className="flex items-center gap-2">
+                  <AlertTriangle className="w-4 h-4 text-amber-600" />
+                  <h4 className="font-bold text-sm text-amber-900">
+                    Adverse Scrutiny/EVC Finding Recorded ({app.applicationId})
+                  </h4>
+                </div>
+                <p className="text-slate-800">
+                  <strong>Grounds of Rejection / Adverse Order:</strong> {app.rejectionReason}
+                </p>
+                <p className="text-[11px] text-slate-600">
+                  As per AICTE Approval Process Handbook, you are granted a statutory opportunity to present your defense before the 
+                  {app.rejectionStage === 'evc' ? ' Standing Hearing Committee (SHC)' : ' Standing Appellate Committee (SAC)'} via Video Conferencing.
+                </p>
+              </div>
+
+              <button
+                onClick={() => {
+                  setAppealModalApp(app);
+                  setTargetCommittee(app.rejectionStage === 'evc' ? 'shc' : 'sac');
+                  setAppealStatement('');
+                }}
+                className="btn-govt-saffron text-xs font-bold px-4 py-2 shrink-0 flex items-center gap-1.5 shadow-sm"
+              >
+                File Appeal to {app.rejectionStage === 'evc' ? 'SHC' : 'SAC'}
+              </button>
+            </div>
+          ))}
+
+          {myApps.filter(a => a.shcHearingSchedule || a.sacHearingSchedule).map(app => {
+            const sched = app.shcHearingSchedule || app.sacHearingSchedule;
+            const comName = app.sacHearingSchedule ? 'Standing Appellate Committee (SAC)' : 'Standing Hearing Committee (SHC)';
+            return (
+              <div key={app.applicationId} className="p-4 bg-blue-50 border border-blue-400 rounded text-xs text-blue-950 flex items-start justify-between gap-4 shadow-xs">
+                <div>
+                  <div className="flex items-center gap-2 font-bold text-sm text-blue-900 mb-1">
+                    <Video className="w-4 h-4 text-blue-700" />
+                    <span>Statutory Video Conferencing (VC) Hearing Scheduled</span>
+                  </div>
+                  <p className="text-slate-800">
+                    <strong>Committee:</strong> {comName} | <strong>Date:</strong> {sched?.scheduledDate} | <strong>Time:</strong> {sched?.scheduledTime} IST
+                  </p>
+                  {sched?.committeeNotes && (
+                    <p className="text-slate-600 mt-1 italic">
+                      Instructions from Committee: "{sched.committeeNotes}"
+                    </p>
+                  )}
+                </div>
+
+                {sched?.meetingLink && (
+                  <a
+                    href={sched.meetingLink.startsWith('http') ? sched.meetingLink : `https://${sched.meetingLink}`}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="btn-govt-primary text-xs font-bold px-3 py-1.5 flex items-center gap-1.5 shrink-0"
+                  >
+                    <Video className="w-3.5 h-3.5" />
+                    Join Video Conference
+                  </a>
+                )}
+              </div>
+            );
+          })}
+        </div>
+      )}
 
       {/* Summary KPI Cards */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
@@ -261,6 +362,34 @@ export const InstitutionPortal: React.FC<InstitutionPortalProps> = ({
                             title="Download Official Council Approval Order (LOA)"
                           >
                             <Award className="w-4 h-4 text-emerald-600" />
+                          </button>
+                        )}
+                        {/* Appeal before SHC if rejected by EVC / Scrutiny */}
+                        {(app.rejectionStage === 'evc' || (app.status === 'evc' && app.rejectionReason)) && app.status !== 'shc' && app.status !== 'sac' && app.status !== 'approved' && app.status !== 'rejected' && (
+                          <button
+                            onClick={() => {
+                              setAppealModalApp(app);
+                              setTargetCommittee('shc');
+                              setAppealStatement('');
+                            }}
+                            className="px-2 py-0.5 bg-amber-600 hover:bg-amber-700 text-white font-bold rounded text-[10px] shadow-xs flex items-center gap-1"
+                            title="Appeal before Standing Hearing Committee"
+                          >
+                            Appeal to SHC
+                          </button>
+                        )}
+                        {/* Appeal before SAC if rejected by SHC */}
+                        {app.rejectionStage === 'shc' && app.status !== 'sac' && app.status !== 'approved' && app.status !== 'rejected' && (
+                          <button
+                            onClick={() => {
+                              setAppealModalApp(app);
+                              setTargetCommittee('sac');
+                              setAppealStatement('');
+                            }}
+                            className="px-2 py-0.5 bg-red-600 hover:bg-red-700 text-white font-bold rounded text-[10px] shadow-xs flex items-center gap-1"
+                            title="Appeal before Standing Appellate Committee"
+                          >
+                            Appeal to SAC
                           </button>
                         )}
                       </div>
@@ -455,6 +584,96 @@ export const InstitutionPortal: React.FC<InstitutionPortalProps> = ({
                   className="btn-govt-primary text-xs disabled:opacity-50"
                 >
                   {isSubmittingResponse ? 'Submitting...' : 'Submit Rectification to Reviewer'}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* MODAL 4: Appeal Submission to Committee (SHC / SAC) */}
+      {appealModalApp && (
+        <div className="fixed inset-0 z-50 overflow-y-auto bg-slate-900/50 backdrop-blur-xs flex items-center justify-center p-4">
+          <div className="bg-white rounded border border-slate-300 shadow-xl max-w-lg w-full overflow-hidden">
+            <div className="bg-[#002147] text-white p-4 flex items-center justify-between border-b-2 border-orange-500">
+              <div>
+                <h3 className="font-bold text-sm tracking-wide">
+                  Statutory Appeal Submission — {targetCommittee.toUpperCase()}
+                </h3>
+                <p className="text-[11px] text-slate-300">
+                  {appealModalApp.applicationId} | Aggrieved Stage: {appealModalApp.rejectionStage?.toUpperCase() || 'EVC'}
+                </p>
+              </div>
+              <button onClick={() => setAppealModalApp(null)} className="text-slate-300 hover:text-white">✕</button>
+            </div>
+
+            <form
+              onSubmit={async (e) => {
+                e.preventDefault();
+                if (!appealStatement.trim()) return;
+                setIsSubmittingAppeal(true);
+                try {
+                  if (onAppealToCommittee) {
+                    await onAppealToCommittee(appealModalApp.applicationId, targetCommittee, appealStatement);
+                  }
+                  alert(`[Appeal Lodged] Your appeal has been registered before ${targetCommittee.toUpperCase()}. The Committee will schedule a Video Conferencing slot.`);
+                  setAppealModalApp(null);
+                } catch (err: any) {
+                  alert(err.message);
+                } finally {
+                  setIsSubmittingAppeal(false);
+                }
+              }}
+              className="p-5 space-y-4 text-xs"
+            >
+              <div className="p-3 bg-red-50 border border-red-200 rounded">
+                <span className="font-bold text-red-900 block mb-1">Adverse Finding to be Challenged:</span>
+                <p className="text-slate-700 leading-relaxed">
+                  {appealModalApp.rejectionReason || 'Deficiency in statutory infrastructure / faculty norms reported during scrutiny/EVC inspection.'}
+                </p>
+              </div>
+
+              <div>
+                <label className="block font-semibold text-slate-700 mb-1">
+                  Appeal Forum
+                </label>
+                <div className="p-2 bg-slate-100 rounded font-bold text-slate-800">
+                  {targetCommittee === 'shc' ? 'Standing Hearing Committee (SHC)' : 'Standing Appellate Committee (SAC)'}
+                </div>
+              </div>
+
+              <div>
+                <label className="block font-semibold text-slate-700 mb-1">
+                  Institutional Grounds of Appeal & Rectification Statement <span className="text-red-600">*</span>
+                </label>
+                <textarea
+                  rows={4}
+                  value={appealStatement}
+                  onChange={(e) => setAppealStatement(e.target.value)}
+                  placeholder="Detail the grounds on which this finding is contested and list evidence prepared for the video conference hearing..."
+                  className="w-full govt-input text-xs"
+                  required
+                />
+              </div>
+
+              <div className="p-2.5 bg-blue-50 border border-blue-200 rounded text-[11px] text-blue-950">
+                Under APH regulations, an opportunity of personal hearing via Video Conferencing will be provided by the Committee.
+              </div>
+
+              <div className="flex justify-end gap-2 pt-2 border-t">
+                <button
+                  type="button"
+                  onClick={() => setAppealModalApp(null)}
+                  className="btn-govt-secondary text-xs"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={isSubmittingAppeal || !appealStatement.trim()}
+                  className="btn-govt-saffron text-xs font-bold px-4 py-2 flex items-center gap-1.5"
+                >
+                  {isSubmittingAppeal ? 'Submitting Appeal...' : `Submit Appeal to ${targetCommittee.toUpperCase()}`}
                 </button>
               </div>
             </form>

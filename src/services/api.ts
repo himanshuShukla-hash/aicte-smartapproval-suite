@@ -808,23 +808,56 @@ export async function recordReviewDecision(
   if (decision === 'recommend_evc') targetStatus = 'evc';
   if (decision === 'return_rectification') targetStatus = 'rectification';
   if (decision === 'recommend_approval') targetStatus = 'sac';
-  if (decision === 'recommend_rejection') targetStatus = 'sac';
+  if (decision === 'recommend_rejection') {
+    // If reviewer recommends rejection at EVC or Scrutiny stage, mark rejectionStage and notify institution to appeal
+    app.rejectionStage = app.status === 'evc' ? 'evc' : 'evc';
+    app.rejectionReason = comment;
+    targetStatus = 'shc'; // Route to Standing Hearing Committee appeal
+  }
 
   return transitionApplication(applicationId, targetStatus, `[Scrutiny Decision: ${decision}] ${comment}`);
 }
 
-export async function recordCommitteeRecommendation(
+export async function scheduleCommitteeHearing(
   applicationId: string,
-  recommendation: string,
-  comment: string
+  committeeType: 'shc' | 'sac',
+  schedule: {
+    scheduledDate: string;
+    scheduledTime: string;
+    meetingLink: string;
+    committeeNotes?: string;
+  }
 ): Promise<Application> {
   const caller = await getMyProfile();
-  if (caller.role !== 'committee' && caller.role !== 'admin' && caller.role !== 'reviewer') {
-    throw new Error('permission-denied: Unauthorized committee actor');
+  if (caller.role !== 'committee' && caller.role !== 'admin') {
+    throw new Error('permission-denied: Only Committee Members or Administrators can schedule hearings.');
   }
 
   const app = store.applications.find(a => a.applicationId === applicationId);
   if (!app) throw new Error('not-found: Application not found');
+
+  if (committeeType === 'shc') {
+    app.shcHearingSchedule = schedule;
+  } else {
+    app.sacHearingSchedule = schedule;
+  }
+  app.version += 1;
+  app.updatedAt = new Date().toISOString();
+
+  // Notify institution
+  const instUsers = store.users.filter(u => u.institutionId === app.institutionId);
+  for (const instUser of instUsers) {
+    store.notifications.unshift({
+      notificationId: `notif_hearing_${Date.now()}_${Math.random().toString(36).substring(7)}`,
+      recipientUid: instUser.uid,
+      applicationId: app.applicationId,
+      type: 'status_changed',
+      message: `[${committeeType.toUpperCase()} Hearing Scheduled] Video Conference scheduled for ${schedule.scheduledDate} at ${schedule.scheduledTime}. VC Link: ${schedule.meetingLink}`,
+      readAt: null,
+      deliveryStatus: 'delivered',
+      createdAt: new Date().toISOString()
+    });
+  }
 
   store.workflowEvents.unshift({
     eventId: `wf_${Date.now()}`,
@@ -832,18 +865,216 @@ export async function recordCommitteeRecommendation(
     actorUid: caller.uid,
     actorName: caller.displayName,
     actorRole: caller.role,
-    action: 'recordCommitteeRecommendation',
+    action: `schedule${committeeType.toUpperCase()}Hearing`,
     fromStatus: app.status,
     toStatus: app.status,
-    comment: `[Committee Recommendation: ${recommendation}] ${comment}`,
+    comment: `[${committeeType.toUpperCase()} VC Scheduled] Date: ${schedule.scheduledDate} Time: ${schedule.scheduledTime}. VC Link: ${schedule.meetingLink}`,
     timestamp: new Date().toISOString(),
-    correlationId: `corr_comm_${Date.now()}`
+    correlationId: `corr_vc_${Date.now()}`
   });
 
-  logAudit(caller, 'COMMITTEE_RECOMMENDATION_RECORDED', 'application', applicationId, {
-    recommendation,
-    comment
+  logAudit(caller, 'COMMITTEE_VC_SCHEDULED', 'application', applicationId, {
+    committeeType,
+    schedule
   });
+
+  store.persistAll();
+  return { ...app };
+}
+
+export async function decideAppeal(
+  applicationId: string,
+  committeeType: 'shc' | 'sac',
+  outcome: 'accept' | 'reject',
+  remarks: string
+): Promise<Application> {
+  const caller = await getMyProfile();
+  if (caller.role !== 'committee' && caller.role !== 'admin') {
+    throw new Error('permission-denied: Only Committee Members or Administrators can decide appeals.');
+  }
+
+  const app = store.applications.find(a => a.applicationId === applicationId);
+  if (!app) throw new Error('not-found: Application not found');
+
+  if (committeeType === 'shc') {
+    if (outcome === 'accept') {
+      // Appeal accepted: recommend approval to Council (status becomes approved by Council / approved)
+      app.status = 'approved';
+      app.currentStage = 'council_decision';
+      app.finalDecisionRemarks = `[SHC Appeal Accepted] ${remarks}`;
+      app.finalDecisionDate = new Date().toISOString();
+      app.finalDecisionBy = caller.displayName;
+      app.rejectionStage = undefined;
+      app.rejectionReason = undefined;
+
+      // Notify institution
+      const instUsers = store.users.filter(u => u.institutionId === app.institutionId);
+      for (const instUser of instUsers) {
+        store.notifications.unshift({
+          notificationId: `notif_shc_acc_${Date.now()}`,
+          recipientUid: instUser.uid,
+          applicationId: app.applicationId,
+          type: 'final_decision',
+          message: `Congratulations! Your appeal before Standing Hearing Committee (SHC) was ACCEPTED. Application has been approved.`,
+          readAt: null,
+          deliveryStatus: 'delivered',
+          createdAt: new Date().toISOString()
+        });
+      }
+    } else {
+      // SHC rejects: allow Institution to appeal before SAC
+      app.rejectionStage = 'shc';
+      app.rejectionReason = remarks;
+      // The status remains shc or can stay in shc with rejectionStage set
+      app.currentStage = 'committee_review';
+
+      // Notify institution
+      const instUsers = store.users.filter(u => u.institutionId === app.institutionId);
+      for (const instUser of instUsers) {
+        store.notifications.unshift({
+          notificationId: `notif_shc_rej_${Date.now()}`,
+          recipientUid: instUser.uid,
+          applicationId: app.applicationId,
+          type: 'status_changed',
+          message: `[SHC Finding] Your case before Standing Hearing Committee was not recommended: "${remarks}". You may appeal before the Standing Appellate Committee (SAC).`,
+          readAt: null,
+          deliveryStatus: 'delivered',
+          createdAt: new Date().toISOString()
+        });
+      }
+    }
+  } else if (committeeType === 'sac') {
+    if (outcome === 'accept') {
+      // SAC Appeal accepted: Council approval granted
+      app.status = 'approved';
+      app.currentStage = 'council_decision';
+      app.finalDecisionRemarks = `[SAC Appellate Order Accepted] ${remarks}`;
+      app.finalDecisionDate = new Date().toISOString();
+      app.finalDecisionBy = caller.displayName;
+      app.rejectionStage = undefined;
+      app.rejectionReason = undefined;
+
+      const instUsers = store.users.filter(u => u.institutionId === app.institutionId);
+      for (const instUser of instUsers) {
+        store.notifications.unshift({
+          notificationId: `notif_sac_acc_${Date.now()}`,
+          recipientUid: instUser.uid,
+          applicationId: app.applicationId,
+          type: 'final_decision',
+          message: `Congratulations! Your appeal before Standing Appellate Committee (SAC) was ACCEPTED. Approval granted.`,
+          readAt: null,
+          deliveryStatus: 'delivered',
+          createdAt: new Date().toISOString()
+        });
+      }
+    } else {
+      // Rejected by SAC (all committees exhausted): cancel by Executive Committee
+      app.status = 'rejected';
+      app.currentStage = 'council_decision';
+      app.rejectionStage = 'executive_committee';
+      app.rejectionReason = `Rejected by Standing Appellate Committee (SAC). All statutory appellate remedies exhausted. Executive Committee Order: ${remarks}`;
+      app.finalDecisionRemarks = app.rejectionReason;
+      app.finalDecisionDate = new Date().toISOString();
+      app.finalDecisionBy = 'AICTE Executive Committee';
+
+      // Official Cancellation Alert to Institution
+      const instUsers = store.users.filter(u => u.institutionId === app.institutionId);
+      for (const instUser of instUsers) {
+        store.notifications.unshift({
+          notificationId: `notif_exec_cancel_${Date.now()}`,
+          recipientUid: instUser.uid,
+          applicationId: app.applicationId,
+          type: 'final_decision',
+          message: `[OFFICIAL EXECUTIVE COMMITTEE NOTICE] Application ${app.applicationId} has been CANCELLED and REJECTED by the AICTE Executive Committee following dismissal of appeal by SAC. Reason: ${remarks}`,
+          readAt: null,
+          deliveryStatus: 'delivered',
+          createdAt: new Date().toISOString()
+        });
+      }
+    }
+  }
+
+  app.version += 1;
+  app.updatedAt = new Date().toISOString();
+
+  store.workflowEvents.unshift({
+    eventId: `wf_${Date.now()}`,
+    applicationId,
+    actorUid: caller.uid,
+    actorName: caller.displayName,
+    actorRole: caller.role,
+    action: `decide${committeeType.toUpperCase()}Appeal`,
+    fromStatus: app.status,
+    toStatus: app.status,
+    comment: `[${committeeType.toUpperCase()} Decision: ${outcome.toUpperCase()}] ${remarks}`,
+    timestamp: new Date().toISOString(),
+    correlationId: `corr_appeal_${Date.now()}`
+  });
+
+  logAudit(caller, `${committeeType.toUpperCase()}_APPEAL_DECIDED`, 'application', applicationId, {
+    outcome,
+    remarks
+  });
+
+  store.persistAll();
+  return { ...app };
+}
+
+export async function appealToCommittee(
+  applicationId: string,
+  targetCommittee: 'shc' | 'sac',
+  appealStatement: string
+): Promise<Application> {
+  const caller = await getMyProfile();
+  if (caller.role !== 'institution') {
+    throw new Error('permission-denied: Only institutions can submit appeals.');
+  }
+
+  const app = store.applications.find(a => a.applicationId === applicationId);
+  if (!app) throw new Error('not-found: Application not found');
+
+  if (app.institutionId !== caller.institutionId) {
+    throw new Error('permission-denied: Access to cross-institution application denied.');
+  }
+
+  const prevStatus = app.status;
+  app.status = targetCommittee; // 'shc' or 'sac'
+  app.currentStage = 'committee_review';
+  app.version += 1;
+  app.updatedAt = new Date().toISOString();
+
+  store.workflowEvents.unshift({
+    eventId: `wf_${Date.now()}`,
+    applicationId,
+    actorUid: caller.uid,
+    actorName: caller.displayName,
+    actorRole: caller.role,
+    action: `appealTo${targetCommittee.toUpperCase()}`,
+    fromStatus: prevStatus,
+    toStatus: app.status,
+    comment: `[Institutional Appeal Submitted to ${targetCommittee.toUpperCase()}] ${appealStatement}`,
+    timestamp: new Date().toISOString(),
+    correlationId: `corr_appeal_sub_${Date.now()}`
+  });
+
+  logAudit(caller, `APPEAL_SUBMITTED_TO_${targetCommittee.toUpperCase()}`, 'application', applicationId, {
+    appealStatement
+  });
+
+  // Notify Committee members and Admins
+  const committeeUsers = store.users.filter(u => u.role === 'committee' || u.role === 'admin');
+  for (const cUser of committeeUsers) {
+    store.notifications.unshift({
+      notificationId: `notif_app_appeal_${Date.now()}_${Math.random().toString(36).substring(7)}`,
+      recipientUid: cUser.uid,
+      applicationId: app.applicationId,
+      type: 'status_changed',
+      message: `New appeal submitted by ${app.institutionName || 'Institution'} before ${targetCommittee.toUpperCase()}. Application ID: ${app.applicationId}`,
+      readAt: null,
+      deliveryStatus: 'delivered',
+      createdAt: new Date().toISOString()
+    });
+  }
 
   store.persistAll();
   return { ...app };

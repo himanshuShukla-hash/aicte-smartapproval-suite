@@ -673,7 +673,7 @@ export const ReviewerPortal: React.FC<ReviewerPortalProps> = ({
                   <option value="recommend_evc">Recommend Expert Visiting Committee (EVC Inspection)</option>
                   <option value="return_rectification">Return to Institution for Deficiency Rectification</option>
                   <option value="recommend_approval">Recommend to Council for Approval (All Norms Satisfied)</option>
-                  <option value="recommend_rejection">Recommend Rejection to Standing Appellate Committee</option>
+                  <option value="recommend_rejection">Reject at EVC/Scrutiny (Refer to SHC Appeal)</option>
                 </select>
               </div>
 

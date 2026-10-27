@@ -109,6 +109,20 @@ export interface Application {
   finalDecisionRemarks?: string;
   finalDecisionDate?: string;
   finalDecisionBy?: string;
+  rejectionStage?: 'evc' | 'shc' | 'sac' | 'executive_committee';
+  rejectionReason?: string;
+  shcHearingSchedule?: {
+    scheduledDate: string;
+    scheduledTime: string;
+    meetingLink: string;
+    committeeNotes?: string;
+  };
+  sacHearingSchedule?: {
+    scheduledDate: string;
+    scheduledTime: string;
+    meetingLink: string;
+    committeeNotes?: string;
+  };
 }
 
 export interface ApplicationDocument {

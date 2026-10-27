@@ -22,6 +22,7 @@ import { InstitutionPortal } from './components/institution/InstitutionPortal';
 import { ApplicationWizard } from './components/institution/ApplicationWizard';
 import { ReviewerPortal } from './components/reviewer/ReviewerPortal';
 import { AdminPortal } from './components/admin/AdminPortal';
+import { CommitteePortal } from './components/committee/CommitteePortal';
 import { NotificationDrawer } from './components/common/NotificationDrawer';
 import { LoaCertificateModal } from './components/common/LoaCertificateModal';
 import { AuthModal } from './components/auth/AuthModal';
@@ -98,8 +99,10 @@ export function App() {
       // Navigate to role's relevant default tab
       if (switched.role === 'institution') {
         setActiveTab('institution_applications');
-      } else if (switched.role === 'reviewer' || switched.role === 'committee') {
+      } else if (switched.role === 'reviewer') {
         setActiveTab('reviewer_queue');
+      } else if (switched.role === 'committee') {
+        setActiveTab('shc_committee');
       } else if (switched.role === 'admin') {
         setActiveTab('admin_dashboard');
       }
@@ -197,6 +200,34 @@ export function App() {
 
   const handleAssignReviewer = async (appId: string, reviewerId: string) => {
     await api.assignReviewer(appId, reviewerId);
+    await refreshAllData();
+  };
+
+  const handleScheduleHearing = async (
+    appId: string,
+    committeeType: 'shc' | 'sac',
+    schedule: { scheduledDate: string; scheduledTime: string; meetingLink: string; committeeNotes?: string }
+  ) => {
+    await api.scheduleCommitteeHearing(appId, committeeType, schedule);
+    await refreshAllData();
+  };
+
+  const handleDecideAppeal = async (
+    appId: string,
+    committeeType: 'shc' | 'sac',
+    outcome: 'accept' | 'reject',
+    remarks: string
+  ) => {
+    await api.decideAppeal(appId, committeeType, outcome, remarks);
+    await refreshAllData();
+  };
+
+  const handleAppealToCommittee = async (
+    appId: string,
+    committee: 'shc' | 'sac',
+    statement: string
+  ) => {
+    await api.appealToCommittee(appId, committee, statement);
     await refreshAllData();
   };
 
@@ -311,6 +342,7 @@ export function App() {
                     onRespondDeficiency={handleRespondDeficiency}
                     onUploadDocument={handleUploadDocument}
                     onOpenLoa={(app) => setLoaModalApp(app)}
+                    onAppealToCommittee={handleAppealToCommittee}
                   />
                 )}
 
@@ -326,6 +358,32 @@ export function App() {
                     onResolveDeficiency={handleResolveDeficiency}
                     onRecordDecision={handleRecordReviewDecision}
                     workflowEvents={workflowEvents}
+                  />
+                )}
+
+                {/* View 4b: Standing Hearing Committee (SHC) Portal */}
+                {activeTab === 'shc_committee' && currentUser && (
+                  <CommitteePortal
+                    committeeType="shc"
+                    currentUser={currentUser}
+                    applications={applications}
+                    workflowEvents={workflowEvents}
+                    documents={documents}
+                    onScheduleHearing={handleScheduleHearing}
+                    onDecideAppeal={handleDecideAppeal}
+                  />
+                )}
+
+                {/* View 4c: Standing Appellate Committee (SAC) Portal */}
+                {activeTab === 'sac_committee' && currentUser && (
+                  <CommitteePortal
+                    committeeType="sac"
+                    currentUser={currentUser}
+                    applications={applications}
+                    workflowEvents={workflowEvents}
+                    documents={documents}
+                    onScheduleHearing={handleScheduleHearing}
+                    onDecideAppeal={handleDecideAppeal}
                   />
                 )}
 
